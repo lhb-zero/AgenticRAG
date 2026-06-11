@@ -37,11 +37,11 @@ async def submit_review(request: ReviewRequest):
     if request.decision not in ("approve", "reject", "edit"):
         raise HTTPException(status_code=400, detail="decision 必须为 'approve'、'reject' 或 'edit'")
 
-    graph = get_retrieval_graph()
+    graph = await get_retrieval_graph()
     config = {"configurable": {"thread_id": request.thread_id}}
 
     # 检查图状态
-    state = graph.get_state(config)
+    state = await graph.aget_state(config)
     if state is None or state.values is None:
         raise HTTPException(status_code=404, detail="未找到对应的会话状态")
 
@@ -89,11 +89,11 @@ async def submit_review(request: ReviewRequest):
 
     try:
         # 更新状态并恢复执行
-        graph.update_state(config, update)
+        await graph.aupdate_state(config, update)
 
         # 恢复执行 - 使用 None 作为输入 (不添加新输入)
         from langgraph.types import Command
-        result = graph.invoke(Command(resume=update), config)
+        result = await graph.ainvoke(Command(resume=update), config)
 
         node_status = result.get("node_status", "done")
 
@@ -121,10 +121,10 @@ async def submit_review(request: ReviewRequest):
 @router.get("/history/{thread_id}")
 async def get_history(thread_id: str):
     """获取当前会话状态 (用于前端渲染 HITL 组件)"""
-    graph = get_retrieval_graph()
+    graph = await get_retrieval_graph()
     config = {"configurable": {"thread_id": thread_id}}
 
-    state = graph.get_state(config)
+    state = await graph.aget_state(config)
 
     if state is None:
         return {
@@ -154,5 +154,6 @@ async def get_history(thread_id: str):
         "research_plan": values.get("research_plan", []),
         "retrieved_docs": values.get("retrieved_docs", []),
         "doc_grades": values.get("doc_grades", []),
+        "hallucination_check": values.get("hallucination_check", {}),
         "error": values.get("error", ""),
     }

@@ -36,12 +36,18 @@ class RetrievalState(TypedDict):
     answer_approved: bool             # 人工是否批准答案
     answer_feedback: str              # 人工对答案的修改/批注
 
+    # ── 幻觉检测 ──
+    hallucination_check: dict          # {"grade": "faithful|hallucinated", "reason": "..."}
+
     # ── 最终输出 ──
     final_answer: str
 
     # ── 流程控制 ──
-    # 当前所处阶段: "researching" | "outline_review" | "generating" | "answer_review" | "done"
+    # 当前所处阶段: "researching" | "outline_review" | "generating" | "answer_review" | "done" | "chitchat"
     node_status: str
+
+    # 闲聊标记（分类器设置）
+    is_chitchat: bool
 
     # 是否需要挂起等待人工确认
     needs_human_input: bool

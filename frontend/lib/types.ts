@@ -40,19 +40,24 @@ export interface HistoryResponse {
   research_plan: string[];
   retrieved_docs: DocResult[];
   doc_grades: DocGrade[];
+  hallucination_check: HallucinationCheck;
   error: string;
 }
 
 // ── SSE 事件 ──
 
-export type SSEEventType = "status" | "outline" | "draft" | "done" | "error";
+export type SSEEventType = "status" | "token" | "outline" | "draft" | "done" | "error";
 
 export interface SSEEvent {
+  _event?: string;        // SSE 事件类型 (status/token/outline/draft/done/error)
   node_status: string;
   message?: string;
+  content?: string;       // token 级内容片段
+  node?: string;          // 当前产生 token 的节点名
   outline?: string;
   draft_answer?: string;
   final_answer?: string;
+  hallucination_check?: HallucinationCheck;
   error?: string;
 }
 
@@ -70,6 +75,12 @@ export interface DocGrade {
   reason: string;
 }
 
+export interface HallucinationCheck {
+  grade: "faithful" | "hallucinated" | "unknown";
+  reason?: string;
+  hallucinated_parts?: string[];
+}
+
 // ── 消息类型 ──
 
 export type MessageRole = "user" | "assistant" | "system";
@@ -83,6 +94,10 @@ export interface ChatMessage {
   outline?: string;
   draft_answer?: string;
   node_status?: string;
+  // 流式状态
+  isStreaming?: boolean;
+  // 幻觉检测
+  hallucination_check?: HallucinationCheck;
 }
 
 // ── 应用阶段 ──

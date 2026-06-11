@@ -1,34 +1,24 @@
-"""对话与 SSE 流式响应端点
+"""对话与 SSE 流式响应端点 + 诊断端点
 
-POST /api/chat - 接收用户消息，启动/推进图执行，返回 SSE 阶段事件流。
-
-SSE 事件格式:
-  event: status
-  data: {"node_status": "researching", "message": "..."}
-
-  event: outline
-  data: {"outline": "...", "node_status": "outline_review"}
-
-  event: draft
-  data: {"draft_answer": "...", "node_status": "answer_review"}
-
-  event: done
-  data: {"final_answer": "...", "node_status": "done"}
-
-  event: error
-  data: {"error": "...", "node_status": "error"}
+POST /api/chat      - 接收用户消息，启动图执行，返回 token 级 SSE 流
+GET  /api/test-sse  - 诊断端点：验证基础 SSE 流是否正常
+POST /api/test-graph - 诊断端点：绕过 graph 直接测试 LLM + Embedding + FAISS
 """
 
 import json
 import asyncio
+import traceback
+import time
 from typing import AsyncGenerator
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
 
 from graph.retrieval_graph import get_retrieval_graph
 from states.retrieval_state import RetrievalState
+from llm import get_llm, get_embeddings
+from tools.retriever import similarity_search
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
@@ -49,128 +39,161 @@ class ChatEvent:
         return f"event: {self.event}\ndata: {json.dumps(self.data, ensure_ascii=False)}\n\n"
 
 
+# 节点名 → 用户可读状态映射
+_NODE_STATUS_MAP = {
+    "classify_query": "classifying",
+    "direct_reply": "chitchat",
+    "research": "researching",
+    "generate_outline": "generating_outline",
+    "generate_draft": "generating_draft",
+    "finalize": "finalizing",
+    "handle_reject": "researching",
+}
+
+# 用于追踪当前正在生成内容的节点
+_GENERATING_NODES = {"direct_reply", "generate_outline", "generate_draft", "finalize"}
+
+
 async def _run_graph_stream(query: str, thread_id: str) -> AsyncGenerator[str, None]:
-    """异步执行图并产生 SSE 事件流"""
-    graph = get_retrieval_graph()
-    config = {"configurable": {"thread_id": thread_id}}
-
-    # 初始状态
-    initial_state: RetrievalState = {
-        "messages": [],
-        "query": query,
-        "thread_id": thread_id,
-        "research_plan": [],
-        "retrieved_docs": [],
-        "doc_grades": [],
-        "rewritten_query": "",
-        "rewrite_count": 0,
-        "outline": "",
-        "outline_approved": False,
-        "outline_feedback": "",
-        "draft_answer": "",
-        "answer_approved": False,
-        "answer_feedback": "",
-        "final_answer": "",
-        "node_status": "researching",
-        "needs_human_input": False,
-        "error": "",
-    }
-
+    """异步执行图并产生 token 级 SSE 事件流"""
+    graph = None
     try:
+        graph = await get_retrieval_graph()
+        config = {"configurable": {"thread_id": thread_id}}
+
+        initial_state: RetrievalState = {
+            "messages": [],
+            "query": query,
+            "thread_id": thread_id,
+            "research_plan": [],
+            "retrieved_docs": [],
+            "doc_grades": [],
+            "rewritten_query": "",
+            "rewrite_count": 0,
+            "outline": "",
+            "outline_approved": False,
+            "outline_feedback": "",
+            "draft_answer": "",
+            "answer_approved": False,
+            "answer_feedback": "",
+            "hallucination_check": {},
+            "final_answer": "",
+            "node_status": "researching",
+            "is_chitchat": False,
+            "needs_human_input": False,
+            "error": "",
+        }
+
         # 发送初始状态
         yield ChatEvent("status", {
             "node_status": "researching",
             "message": f"开始处理查询: {query}",
         }).to_sse()
 
-        # 执行图 (异步，以便在中断时能发送事件)
-        # 注意: 需要在后台线程中运行同步的 graph.invoke
-        loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(
-            None,
-            lambda: graph.invoke(initial_state, config)
-        )
+        # 使用 astream_events 获取 token 级流
+        current_node = ""
+        node_accumulator = {}  # node_name -> accumulated text
 
-        # 检查中断状态
-        snapshot = graph.get_state(config)
+        async for event in graph.astream_events(initial_state, config, version="v2"):
+            kind = event.get("event", "")
+            name = event.get("name", "")
+            metadata = event.get("metadata", {})
+            data = event.get("data", {})
 
-        # 根据当前节点状态发送事件
-        node_status = result.get("node_status", "done")
-
-        if node_status == "outline_review":
-            yield ChatEvent("outline", {
-                "outline": result.get("outline", ""),
-                "node_status": "outline_review",
-                "message": "大纲已生成，请审核确认",
-            }).to_sse()
-
-        elif node_status == "generating":
-            # 大纲已确认，正在生成草稿
-            yield ChatEvent("status", {
-                "node_status": "generating",
-                "message": "大纲已确认，正在生成草稿...",
-            }).to_sse()
-
-        elif node_status == "answer_review":
-            yield ChatEvent("draft", {
-                "draft_answer": result.get("draft_answer", ""),
-                "node_status": "answer_review",
-                "message": "草稿已生成，请审核确认",
-            }).to_sse()
-
-        elif node_status == "done":
-            yield ChatEvent("done", {
-                "final_answer": result.get("final_answer", ""),
-                "node_status": "done",
-                "message": "答案已生成",
-            }).to_sse()
-
-        else:
-            # 检查是否有 __interrupt__ 元组
-            interrupts = getattr(snapshot, "interrupts", None) if snapshot else None
-            if interrupts:
-                # 图在中途挂起，需要根据 interrupted node 判断
-                interrupted_node = None
-                for interrupt_item in interrupts:
-                    if hasattr(interrupt_item, 'value') and isinstance(interrupt_item.value, str):
-                        interrupted_node = interrupt_item.value
-                        break
-
-                if interrupted_node == "generate_outline":
-                    state_values = result
-                    yield ChatEvent("outline", {
-                        "outline": state_values.get("outline", ""),
-                        "node_status": "outline_review",
-                        "message": "大纲已生成，请审核确认",
-                    }).to_sse()
-                elif interrupted_node == "generate_draft":
-                    state_values = result
-                    yield ChatEvent("draft", {
-                        "draft_answer": state_values.get("draft_answer", ""),
-                        "node_status": "answer_review",
-                        "message": "草稿已生成，请审核确认",
-                    }).to_sse()
-                else:
+            # 检测节点切换（on_chain_start 事件）
+            if kind == "on_chain_start" and metadata.get("langgraph_node"):
+                node_name = metadata["langgraph_node"]
+                if node_name != current_node:
+                    current_node = node_name
+                    status = _NODE_STATUS_MAP.get(node_name, node_name)
                     yield ChatEvent("status", {
-                        "node_status": result.get("node_status", "researching"),
-                        "message": f"图已挂起在: {interrupted_node or 'unknown'}",
+                        "node_status": status,
+                        "node": node_name,
+                        "message": f"进入节点: {node_name}",
                     }).to_sse()
+
+            # 捕获 LLM token 流
+            elif kind == "on_chat_model_stream" and current_node in _GENERATING_NODES:
+                chunk = data.get("chunk")
+                if chunk and hasattr(chunk, "content") and chunk.content:
+                    token_text = chunk.content
+                    # 累积文本
+                    node_accumulator.setdefault(current_node, "")
+                    node_accumulator[current_node] += token_text
+                    yield ChatEvent("token", {
+                        "content": token_text,
+                        "node": current_node,
+                    }).to_sse()
+
+        # 流结束后，检查中断状态
+        snapshot = await graph.aget_state(config)
+        values = snapshot.values if snapshot else {}
+        node_status = values.get("node_status", "done") if values else "done"
+
+        # 检查是否有中断
+        interrupts = getattr(snapshot, "interrupts", None) if snapshot else None
+
+        if interrupts:
+            # 有中断 → HITL 等待
+            interrupted_node = None
+            for interrupt_item in interrupts:
+                if hasattr(interrupt_item, 'value') and isinstance(interrupt_item.value, str):
+                    interrupted_node = interrupt_item.value
+                    break
+
+            if interrupted_node == "generate_outline" or node_status == "outline_review":
+                yield ChatEvent("outline", {
+                    "outline": values.get("outline", ""),
+                    "node_status": "outline_review",
+                    "message": "大纲已生成，请审核确认",
+                }).to_sse()
+            elif interrupted_node == "generate_draft" or node_status == "answer_review":
+                yield ChatEvent("draft", {
+                    "draft_answer": values.get("draft_answer", ""),
+                    "node_status": "answer_review",
+                    "hallucination_check": values.get("hallucination_check", {}),
+                    "message": "草稿已生成，请审核确认",
+                }).to_sse()
             else:
                 yield ChatEvent("status", {
                     "node_status": node_status,
-                    "message": f"处理完成: {node_status}",
+                    "message": f"图已挂起在: {interrupted_node or 'unknown'}",
                 }).to_sse()
+        elif node_status == "done":
+            yield ChatEvent("done", {
+                "final_answer": values.get("final_answer", ""),
+                "node_status": "done",
+                "message": "答案已生成",
+            }).to_sse()
+        else:
+            yield ChatEvent("status", {
+                "node_status": node_status,
+                "message": f"处理完成: {node_status}",
+            }).to_sse()
 
-    except Exception as e:
+    except asyncio.TimeoutError:
+        print("[Chat] 图执行超时 (180s)", flush=True)
         yield ChatEvent("error", {
-            "error": str(e),
+            "error": "图执行超时，请稍后重试",
+            "node_status": "error",
+        }).to_sse()
+
+    except BaseException as e:
+        exc_type = type(e).__name__
+        exc_msg = str(e)
+        tb = traceback.format_exc()
+        print(f"[Chat] 未捕获异常: {exc_type}: {exc_msg}", flush=True)
+        print(f"[Chat] Traceback:\n{tb}", flush=True)
+
+        yield ChatEvent("error", {
+            "error": f"{exc_type}: {exc_msg}",
             "node_status": "error",
         }).to_sse()
 
 
 @router.post("/chat")
 async def chat(request: ChatRequest):
-    """接收用户消息并返回 SSE 流式响应"""
+    """接收用户消息并返回 token 级 SSE 流式响应"""
     if not request.query.strip():
         raise HTTPException(status_code=400, detail="查询不能为空")
 
@@ -183,3 +206,98 @@ async def chat(request: ChatRequest):
             "X-Accel-Buffering": "no",
         },
     )
+
+
+# ═══════════════════════════════════════════════
+# 诊断端点
+# ═══════════════════════════════════════════════
+
+@router.get("/test-sse")
+async def test_sse():
+    """诊断端点：验证基础 SSE 流是否正常"""
+
+    async def _test_stream():
+        for i in range(3):
+            yield ChatEvent("status", {
+                "node_status": "testing",
+                "message": f"SSE test event {i + 1}/3",
+                "timestamp": time.time(),
+            }).to_sse()
+            await asyncio.sleep(0.5)
+        yield ChatEvent("done", {
+            "node_status": "done",
+            "message": "SSE 测试完成",
+        }).to_sse()
+
+    return StreamingResponse(
+        _test_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.post("/test-graph")
+async def test_graph(request: ChatRequest):
+    """诊断端点：绕过 graph，直接测试 LLM + Embedding + FAISS 三个组件"""
+    results = {}
+
+    # 1. 测试 LLM
+    try:
+        llm = get_llm()
+        start = time.time()
+        resp = llm.invoke("用一句话回答：什么是 LangGraph？")
+        elapsed = time.time() - start
+        results["llm"] = {
+            "ok": True,
+            "elapsed_s": round(elapsed, 2),
+            "response_preview": resp.content[:200] if hasattr(resp, 'content') else str(resp)[:200],
+        }
+    except BaseException as e:
+        results["llm"] = {
+            "ok": False,
+            "error": f"{type(e).__name__}: {str(e)}",
+        }
+
+    # 2. 测试 Embedding (Ollama)
+    try:
+        emb = get_embeddings()
+        start = time.time()
+        vec = emb.embed_query("测试文本")
+        elapsed = time.time() - start
+        results["embedding"] = {
+            "ok": True,
+            "elapsed_s": round(elapsed, 2),
+            "dimension": len(vec),
+        }
+    except BaseException as e:
+        results["embedding"] = {
+            "ok": False,
+            "error": f"{type(e).__name__}: {str(e)}",
+        }
+
+    # 3. 测试 FAISS 检索
+    try:
+        start = time.time()
+        docs = similarity_search(request.query, k=3)
+        elapsed = time.time() - start
+        results["faiss"] = {
+            "ok": True,
+            "elapsed_s": round(elapsed, 2),
+            "doc_count": len(docs),
+            "preview": [d["content"][:80] for d in docs[:2]],
+        }
+    except BaseException as e:
+        results["faiss"] = {
+            "ok": False,
+            "error": f"{type(e).__name__}: {str(e)}",
+        }
+
+    all_ok = all(v.get("ok", False) for v in results.values())
+    return JSONResponse({
+        "all_ok": all_ok,
+        "results": results,
+    })

@@ -366,7 +366,13 @@ def build_index_from_directory(directory: str) -> int:
             else:
                 continue
 
-            all_docs.extend(loader.load())
+            docs = loader.load()
+            # 为每个 chunk 设置 title 元数据（去掉扩展名）
+            title = os.path.splitext(filename)[0]
+            for doc in docs:
+                doc.metadata["title"] = title
+                doc.metadata.setdefault("source", filepath)
+            all_docs.extend(docs)
         except Exception as e:
             print(f"加载文件 {filename} 失败: {e}")
 

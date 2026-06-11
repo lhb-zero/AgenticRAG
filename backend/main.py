@@ -44,10 +44,12 @@ app.add_middleware(
 from api.chat import router as chat_router
 from api.hitl import router as hitl_router
 from api.index import router as index_router
+from api.dashboard import router as dashboard_router
 
 app.include_router(chat_router)
 app.include_router(hitl_router)
 app.include_router(index_router)
+app.include_router(dashboard_router)
 
 
 # ── 健康检查 ──

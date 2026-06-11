@@ -19,6 +19,7 @@ body {
   background: rgb(var(--background));
   font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     sans-serif;
+  overflow: hidden;
 }
 
 /* 自定义滚动条 */
@@ -53,4 +54,38 @@ body {
 
 .animate-fade-in {
   animation: fadeIn 0.3s ease-out;
+}
+
+/* ── 流式光标 ── */
+.streaming-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1.1em;
+  margin-left: 2px;
+  background: linear-gradient(180deg, #6366f1, #a855f7);
+  border-radius: 1px;
+  animation: cursorBlink 1s ease-in-out infinite;
+  vertical-align: text-bottom;
+}
+
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
+}
+
+/* ── 助手消息 Markdown ── */
+.chat-markdown pre code {
+  display: block;
+  padding: 1rem 1.25rem;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.chat-markdown pre code .keyword { color: #c084fc; }
+.chat-markdown pre code .string { color: #86efac; }
+.chat-markdown pre code .comment { color: #64748b; }
+
+/* ── textarea 自适应高度 ── */
+textarea {
+  field-sizing: content;
 }

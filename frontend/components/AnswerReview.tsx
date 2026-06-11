@@ -1,11 +1,13 @@
-// 答案审核组件 - HITL: 修订/确认最终答案
+// 答案审核组件 - HITL: 修订/确认最终答案 + 幻觉检测展示
 
 "use client";
 
 import React, { useState } from "react";
+import type { HallucinationCheck } from "@/lib/types";
 
 interface Props {
   draftAnswer: string;
+  hallucinationCheck?: HallucinationCheck;
   onApprove: () => void;
   onEdit: (feedback: string) => void;
   onReject: () => void;
@@ -14,6 +16,7 @@ interface Props {
 
 export default function AnswerReview({
   draftAnswer,
+  hallucinationCheck,
   onApprove,
   onEdit,
   onReject,
@@ -40,6 +43,48 @@ export default function AnswerReview({
           等待确认
         </span>
       </div>
+
+      {/* 幻觉检测结果 */}
+      {hallucinationCheck && hallucinationCheck.grade !== "unknown" && (
+        <div
+          className={`mb-4 p-3 rounded-lg border ${
+            hallucinationCheck.grade === "faithful"
+              ? "bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700"
+              : "bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700"
+          }`}
+        >
+          <div className="flex items-center gap-2 mb-1">
+            {hallucinationCheck.grade === "faithful" ? (
+              <>
+                <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
+                <span className="text-sm font-medium text-green-800 dark:text-green-200">
+                  幻觉检测通过 — 内容忠实于文档
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="inline-block w-2 h-2 rounded-full bg-red-500" />
+                <span className="text-sm font-medium text-red-800 dark:text-red-200">
+                  幻觉检测警告 — 存在未验证内容
+                </span>
+              </>
+            )}
+          </div>
+          {hallucinationCheck.reason && (
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+              {hallucinationCheck.reason}
+            </p>
+          )}
+          {hallucinationCheck.hallucinated_parts &&
+            hallucinationCheck.hallucinated_parts.length > 0 && (
+              <ul className="text-xs text-red-600 dark:text-red-400 mt-1 list-disc list-inside">
+                {hallucinationCheck.hallucinated_parts.map((part, i) => (
+                  <li key={i}>{part}</li>
+                ))}
+              </ul>
+            )}
+        </div>
+      )}
 
       <div className="prose prose-sm dark:prose-invert max-w-none mb-4 p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 max-h-96 overflow-y-auto">
         <div className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">

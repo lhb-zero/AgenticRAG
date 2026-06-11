@@ -8,7 +8,7 @@ import os
 import shutil
 from fastapi import APIRouter, UploadFile, File, HTTPException
 
-from config import settings
+from config import settings, BACKEND_DIR
 from graph.index_graph import build_index_from_mock, build_index_from_directory
 
 router = APIRouter(prefix="/api/index", tags=["index"])
@@ -31,7 +31,7 @@ async def trigger_index_build(source: str = "mock"):
                 "message": f"Mock 索引构建成功，共 {chunk_count} 个分块",
             }
         elif source == "uploaded":
-            raw_dir = os.path.join(settings.BACKEND_DIR, "data", "raw")
+            raw_dir = os.path.join(str(BACKEND_DIR), "data", "raw")
             chunk_count = build_index_from_directory(raw_dir)
             return {
                 "success": True,
@@ -57,7 +57,7 @@ async def upload_document(file: UploadFile = File(...)):
             detail=f"不支持的文件类型: {ext}。支持: {', '.join(allowed_extensions)}",
         )
 
-    raw_dir = os.path.join(settings.BACKEND_DIR, "data", "raw")
+    raw_dir = os.path.join(str(BACKEND_DIR), "data", "raw")
     os.makedirs(raw_dir, exist_ok=True)
 
     file_path = os.path.join(raw_dir, file.filename)

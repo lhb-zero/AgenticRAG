@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 from pydantic_settings import BaseSettings
+from pydantic import field_validator
 
 
 # 项目根目录 = backend 的父目录
@@ -19,6 +20,12 @@ class Settings(BaseSettings):
     deepseek_model: str = "deepseek-v4-flash"
     deepseek_temperature: float = 0.0
     deepseek_max_tokens: int = 4096
+
+    @field_validator("deepseek_model", mode="before")
+    @classmethod
+    def normalize_model_name(cls, v: str) -> str:
+        """确保模型名使用连字符 (deepseek-v4-flash) 而非下划线"""
+        return v.replace("_", "-")
 
     # ── Embedding: 本地 Ollama bge-m3 (主方案) ──
     embedding_provider: str = "ollama"          # "ollama" | "openai" | "deepseek"
@@ -54,6 +61,7 @@ class Settings(BaseSettings):
         "env_file_encoding": "utf-8",
         "case_sensitive": False,
         "extra": "ignore",
+        "frozen": False,  # 允许运行时热更新字段
     }
 
 

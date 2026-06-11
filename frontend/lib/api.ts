@@ -81,7 +81,7 @@ export async function sendChatMessage(
         } else if (line.startsWith("data: ")) {
           try {
             const data = JSON.parse(line.slice(6));
-            onEvent(data);
+            onEvent({ _event: currentEvent, ...data });
           } catch {
             // skip parse error
           }
@@ -121,4 +121,182 @@ export async function buildIndex(source: "mock" | "uploaded" = "mock") {
     `/api/index/build?source=${source}`,
     { method: "POST" }
   );
+}
+
+// ── POST /api/test-graph ──
+
+export async function testGraph(request: ChatRequest): Promise<{
+  all_ok: boolean;
+  results: Record<string, { ok: boolean; error?: string; [key: string]: any }>;
+}> {
+  return apiFetch("/api/test-graph", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
+
+// ── Dashboard API ──
+
+export interface DashboardStats {
+  vectorstore: {
+    total_chunks: number;
+    unique_documents: number;
+    documents: { title: string; chunks: number }[];
+    error?: string;
+  };
+  index_files: {
+    faiss_size_kb: number;
+    pkl_size_kb: number;
+  };
+  sessions: {
+    total: number;
+    active: number;
+  };
+  config: {
+    llm_model: string;
+    embedding_provider: string;
+    embedding_model: string;
+    chunk_size: number;
+    chunk_overlap: number;
+    top_k: number;
+    max_rewrite_attempts: number;
+  };
+}
+
+export interface DocInfo {
+  title: string;
+  source: string;
+  chunks: number;
+  sample: string;
+}
+
+export interface SessionInfo {
+  thread_id: string;
+  has_interrupt: boolean;
+  node_status: string;
+  query?: string;
+}
+
+export async function getDashboardStats(): Promise<DashboardStats> {
+  return apiFetch<DashboardStats>("/api/dashboard/stats");
+}
+
+export async function getDashboardDocuments(): Promise<{
+  documents: DocInfo[];
+  total_chunks: number;
+}> {
+  return apiFetch("/api/dashboard/documents");
+}
+
+export async function getDocumentChunks(title: string): Promise<{
+  title: string;
+  chunks: { content: string; metadata: Record<string, string>; length: number }[];
+  total: number;
+}> {
+  return apiFetch(`/api/dashboard/documents/chunks?title=${encodeURIComponent(title)}`);
+}
+
+export async function deleteDashboardDocument(
+  title: string
+): Promise<{ success: boolean; deleted_chunks: number }> {
+  return apiFetch(`/api/dashboard/documents?title=${encodeURIComponent(title)}`, {
+    method: "DELETE",
+  });
+}
+
+export interface ModelPreset {
+  id: string;
+  name: string;
+  desc: string;
+}
+
+export interface ConfigResponse {
+  models: ModelPreset[];
+  current_model: string;
+  params: {
+    deepseek_temperature: number;
+    deepseek_max_tokens: number;
+    chunk_size: number;
+    chunk_overlap: number;
+    top_k_retrieval: number;
+    max_rewrite_attempts: number;
+    max_search_queries: number;
+  };
+}
+
+export async function getDashboardConfig(): Promise<ConfigResponse> {
+  return apiFetch("/api/dashboard/config");
+}
+
+export async function switchModel(model: string): Promise<{ success: boolean; message: string }> {
+  return apiFetch("/api/dashboard/config/model", {
+    method: "PUT",
+    body: JSON.stringify({ model }),
+  });
+}
+
+export async function updateParams(update: Record<string, number>): Promise<{
+  success: boolean;
+  message: string;
+}> {
+  return apiFetch("/api/dashboard/config/params", {
+    method: "PUT",
+    body: JSON.stringify(update),
+  });
+}
+
+export async function testCurrentModel(): Promise<{
+  success: boolean;
+  model?: string;
+  elapsed_s?: number;
+  response?: string;
+  error?: string;
+}> {
+  return apiFetch("/api/dashboard/config/test", { method: "POST" });
+}
+
+export async function getDashboardSessions(): Promise<{
+  sessions: SessionInfo[];
+  total: number;
+}> {
+  return apiFetch("/api/dashboard/sessions");
+}
+
+export async function deleteDashboardSession(
+  threadId: string
+): Promise<{ success: boolean }> {
+  return apiFetch(`/api/dashboard/sessions/${threadId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function getDashboardTrace(threadId: string): Promise<{
+  thread_id: string;
+  current_status: string;
+  query: string;
+  research_plan: string[];
+  retrieved_docs: any[];
+  doc_grades: any[];
+  outline: string;
+  draft_answer: string;
+  final_answer: string;
+  hallucination_check: any;
+  has_interrupt: boolean;
+  history: any[];
+}> {
+  return apiFetch(`/api/dashboard/trace/${threadId}`);
+}
+
+export async function uploadDocument(
+  file: File
+): Promise<{ success: boolean; filename: string }> {
+  const url = `${API_BASE}/api/index/upload`;
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(url, { method: "POST", body: formData });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
 }

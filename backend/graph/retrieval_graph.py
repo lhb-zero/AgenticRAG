@@ -8,8 +8,9 @@ import json
 from typing import Literal
 from pathlib import Path
 
+import aiosqlite
 from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langchain_core.messages import HumanMessage, AIMessage
 
 from states.retrieval_state import RetrievalState
@@ -19,6 +20,7 @@ from prompts import (
     ANSWER_GENERATOR_PROMPT,
     OUTLINE_REVISION_PROMPT,
     HALLUCINATION_GRADER_PROMPT,
+    QUERY_CLASSIFIER_PROMPT,
 )
 from graph.researcher_graph import researcher_graph
 from llm import get_llm
@@ -42,17 +44,67 @@ def _format_docs_for_prompt(docs: list[dict]) -> str:
     return "\n---\n".join(parts)
 
 
-def _get_checkpointer():
-    """获取 SQLite Checkpointer"""
+# 全局 Async Checkpointer 单例
+_aiosqlite_conn = None
+_checkpointer = None
+
+
+async def _get_checkpointer() -> AsyncSqliteSaver:
+    """获取 Async SQLite Checkpointer 单例
+
+    手动创建 aiosqlite 连接并传给 AsyncSqliteSaver 构造函数，
+    保持连接持久化，避免 context manager 退出后连接被关闭。
+    """
+    global _aiosqlite_conn, _checkpointer
+
+    if _checkpointer is not None:
+        return _checkpointer
+
     db_path = settings.checkpointer_db_path
-    # 确保父目录存在
     Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-    return SqliteSaver.from_conn_string(db_path)
+
+    _aiosqlite_conn = await aiosqlite.connect(db_path)
+    _checkpointer = AsyncSqliteSaver(_aiosqlite_conn)
+    await _checkpointer.setup()
+
+    return _checkpointer
 
 
 # ═══════════════════════════════════════════════
 # 节点函数
 # ═══════════════════════════════════════════════
+
+def classify_query_node(state: RetrievalState) -> dict:
+    """判断用户输入是闲聊还是需要检索的真实问题"""
+    query = state["query"]
+    llm = get_llm()
+
+    prompt = QUERY_CLASSIFIER_PROMPT.format(query=query)
+    response = llm.invoke(prompt)
+    label = response.content.strip().lower()
+
+    is_chitchat = "chitchat" in label
+
+    return {
+        "is_chitchat": is_chitchat,
+        "node_status": "chitchat" if is_chitchat else "researching",
+    }
+
+
+def direct_reply_node(state: RetrievalState) -> dict:
+    """闲聊直接回复，不走 RAG 检索"""
+    query = state["query"]
+    llm = get_llm()
+
+    response = llm.invoke(
+        f"你是一个友好、专业的AI助手。用户说了一句闲聊/问候，请简短友好地回复。\n\n用户: {query}"
+    )
+
+    return {
+        "final_answer": response.content.strip(),
+        "node_status": "done",
+        "messages": [AIMessage(content=response.content.strip())],
+    }
 
 def research_node(state: RetrievalState) -> dict:
     """调用 Researcher 子图执行 ReAct 检索循环"""
@@ -116,8 +168,8 @@ def generate_outline_node(state: RetrievalState) -> dict:
     return {
         "outline": response.content.strip(),
         "outline_feedback": "",  # 清除反馈
-        "node_status": "generating",
-        "needs_human_input": False,  # 生成完成后等待前端调用 review 确认
+        "node_status": "outline_review",  # 挂起后前端会渲染大纲审核组件
+        "needs_human_input": False,
         "messages": [
             AIMessage(content=f"大纲已{action}，请审核确认"),
         ],
@@ -153,6 +205,7 @@ def generate_draft_node(state: RetrievalState) -> dict:
         return {
             "draft_answer": draft,
             "answer_feedback": "",
+            "hallucination_check": hallucination_check,
             "node_status": "answer_review",
             "needs_human_input": True,
             "messages": [
@@ -176,6 +229,7 @@ def generate_draft_node(state: RetrievalState) -> dict:
 
     return {
         "draft_answer": draft,
+        "hallucination_check": hallucination_check,
         "node_status": "answer_review",
         "needs_human_input": True,
         "messages": [
@@ -282,19 +336,34 @@ def decide_after_handle_reject(state: RetrievalState) -> Literal["research", "ge
 # 构建检索主图
 # ═══════════════════════════════════════════════
 
-def build_retrieval_graph() -> StateGraph:
+async def build_retrieval_graph() -> StateGraph:
     """构建检索主图 (含 HITL 中断点)"""
     builder = StateGraph(RetrievalState)
 
     # 添加节点
+    builder.add_node("classify_query", classify_query_node)
+    builder.add_node("direct_reply", direct_reply_node)
     builder.add_node("research", research_node)
     builder.add_node("generate_outline", generate_outline_node)
     builder.add_node("generate_draft", generate_draft_node)
     builder.add_node("finalize", finalize_node)
     builder.add_node("handle_reject", handle_reject_node)
 
-    # 设置入口
-    builder.set_entry_point("research")
+    # 设置入口 → 分类器
+    builder.set_entry_point("classify_query")
+
+    # classify_query → 条件路由 (闲聊 vs 知识问答)
+    builder.add_conditional_edges(
+        "classify_query",
+        lambda state: "direct_reply" if state.get("is_chitchat") else "research",
+        {
+            "direct_reply": "direct_reply",
+            "research": "research",
+        },
+    )
+
+    # 闲聊直接结束
+    builder.add_edge("direct_reply", END)
 
     # 固定边
     builder.add_edge("research", "generate_outline")
@@ -328,11 +397,11 @@ def build_retrieval_graph() -> StateGraph:
     builder.add_edge("finalize", END)
 
     # 编译图，带 Checkpointer + HITL 中断点
-    checkpointer = _get_checkpointer()
+    # interrupt_after: 在节点执行完毕后挂起，确保用户能看到生成的内容
+    checkpointer = await _get_checkpointer()
     graph = builder.compile(
         checkpointer=checkpointer,
-        # 在大纲生成和草稿生成之前挂起，等待人工确认
-        interrupt_before=["generate_outline", "generate_draft"],
+        interrupt_after=["generate_outline", "generate_draft"],
     )
 
     return graph
@@ -345,9 +414,9 @@ def build_retrieval_graph() -> StateGraph:
 _retrieval_graph = None
 
 
-def get_retrieval_graph():
+async def get_retrieval_graph():
     """获取检索主图实例 (懒加载)"""
     global _retrieval_graph
     if _retrieval_graph is None:
-        _retrieval_graph = build_retrieval_graph()
+        _retrieval_graph = await build_retrieval_graph()
     return _retrieval_graph
