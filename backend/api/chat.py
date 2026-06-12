@@ -51,7 +51,9 @@ _NODE_STATUS_MAP = {
 }
 
 # 用于追踪当前正在生成内容的节点
-_GENERATING_NODES = {"direct_reply", "generate_outline", "generate_draft", "finalize"}
+# 注意: generate_outline 和 generate_draft 的内容通过 outline/draft 事件发送给审核组件，
+# 不作为 token 流追加到消息气泡，避免重复显示
+_GENERATING_NODES = {"direct_reply", "finalize"}
 
 
 async def _run_graph_stream(query: str, thread_id: str) -> AsyncGenerator[str, None]:
@@ -125,40 +127,25 @@ async def _run_graph_stream(query: str, thread_id: str) -> AsyncGenerator[str, N
                         "node": current_node,
                     }).to_sse()
 
-        # 流结束后，检查中断状态
+        # 流结束后，检查状态并发送对应的 SSE 事件
         snapshot = await graph.aget_state(config)
         values = snapshot.values if snapshot else {}
         node_status = values.get("node_status", "done") if values else "done"
 
-        # 检查是否有中断
-        interrupts = getattr(snapshot, "interrupts", None) if snapshot else None
-
-        if interrupts:
-            # 有中断 → HITL 等待
-            interrupted_node = None
-            for interrupt_item in interrupts:
-                if hasattr(interrupt_item, 'value') and isinstance(interrupt_item.value, str):
-                    interrupted_node = interrupt_item.value
-                    break
-
-            if interrupted_node == "generate_outline" or node_status == "outline_review":
-                yield ChatEvent("outline", {
-                    "outline": values.get("outline", ""),
-                    "node_status": "outline_review",
-                    "message": "大纲已生成，请审核确认",
-                }).to_sse()
-            elif interrupted_node == "generate_draft" or node_status == "answer_review":
-                yield ChatEvent("draft", {
-                    "draft_answer": values.get("draft_answer", ""),
-                    "node_status": "answer_review",
-                    "hallucination_check": values.get("hallucination_check", {}),
-                    "message": "草稿已生成，请审核确认",
-                }).to_sse()
-            else:
-                yield ChatEvent("status", {
-                    "node_status": node_status,
-                    "message": f"图已挂起在: {interrupted_node or 'unknown'}",
-                }).to_sse()
+        # 以 node_status 为主条件判断当前阶段，发送带完整数据的事件
+        if node_status == "outline_review":
+            yield ChatEvent("outline", {
+                "outline": values.get("outline", ""),
+                "node_status": "outline_review",
+                "message": "大纲已生成，请审核确认",
+            }).to_sse()
+        elif node_status == "answer_review":
+            yield ChatEvent("draft", {
+                "draft_answer": values.get("draft_answer", ""),
+                "node_status": "answer_review",
+                "hallucination_check": values.get("hallucination_check", {}),
+                "message": "草稿已生成，请审核确认",
+            }).to_sse()
         elif node_status == "done":
             yield ChatEvent("done", {
                 "final_answer": values.get("final_answer", ""),
@@ -166,9 +153,12 @@ async def _run_graph_stream(query: str, thread_id: str) -> AsyncGenerator[str, N
                 "message": "答案已生成",
             }).to_sse()
         else:
+            # 可能仍在处理中或挂起在其他节点
+            interrupts = getattr(snapshot, "interrupts", None) if snapshot else None
             yield ChatEvent("status", {
                 "node_status": node_status,
                 "message": f"处理完成: {node_status}",
+                "has_interrupt": bool(interrupts),
             }).to_sse()
 
     except asyncio.TimeoutError:

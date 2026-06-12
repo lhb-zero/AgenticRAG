@@ -28,25 +28,48 @@ export default function OutlineReview({
   };
 
   return (
-    <div className="border border-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl p-5 my-3">
+    <div
+      className="rounded-xl p-5 my-3 border"
+      style={{
+        backgroundColor: "#fef9c3", // yellow-100
+        borderColor: "#facc15", // yellow-400
+      }}
+    >
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-lg font-semibold text-yellow-800 dark:text-yellow-200">
+        <h3 className="text-lg font-semibold" style={{ color: "#854d0e" }}>
           大纲审核
         </h3>
-        <span className="text-xs px-2 py-1 bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 rounded-full">
+        <span
+          className="text-xs px-2 py-1 rounded-full"
+          style={{ backgroundColor: "#fde047", color: "#854d0e" }}
+        >
           等待确认
         </span>
       </div>
 
       {isEditing ? (
         <textarea
-          className="w-full h-64 p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full h-64 p-3 border rounded-lg font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          style={{
+            backgroundColor: "#ffffff",
+            borderColor: "#d1d5db",
+            color: "#111827",
+          }}
           value={editedOutline}
           onChange={(e) => setEditedOutline(e.target.value)}
         />
       ) : (
-        <div className="prose prose-sm dark:prose-invert max-w-none mb-4 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-          <pre className="whitespace-pre-wrap font-sans text-sm text-gray-700 dark:text-gray-300">
+        <div
+          className="mb-4 p-3 rounded-lg border"
+          style={{
+            backgroundColor: "#ffffff",
+            borderColor: "#e5e7eb",
+          }}
+        >
+          <pre
+            className="whitespace-pre-wrap font-sans text-sm m-0"
+            style={{ color: "#1f2937" }}
+          >
             {outline}
           </pre>
         </div>
@@ -56,7 +79,11 @@ export default function OutlineReview({
         {isEditing ? (
           <>
             <button
-              className="px-4 py-2 text-sm rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50"
+              className="px-4 py-2 text-sm rounded-lg disabled:opacity-50"
+              style={{
+                backgroundColor: "#e5e7eb",
+                color: "#374151",
+              }}
               onClick={() => {
                 setEditedOutline(outline);
                 setIsEditing(false);
@@ -66,7 +93,11 @@ export default function OutlineReview({
               取消
             </button>
             <button
-              className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+              className="px-4 py-2 text-sm rounded-lg disabled:opacity-50"
+              style={{
+                backgroundColor: "#2563eb",
+                color: "#ffffff",
+              }}
               onClick={handleEditSubmit}
               disabled={disabled}
             >
@@ -76,21 +107,34 @@ export default function OutlineReview({
         ) : (
           <>
             <button
-              className="px-4 py-2 text-sm rounded-lg bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/50 disabled:opacity-50"
+              className="px-4 py-2 text-sm rounded-lg disabled:opacity-50"
+              style={{
+                backgroundColor: "#fee2e2",
+                color: "#b91c1c",
+              }}
               onClick={onReject}
               disabled={disabled}
             >
               打回重做
             </button>
             <button
-              className="px-4 py-2 text-sm rounded-lg bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 hover:bg-yellow-200 dark:hover:bg-yellow-900/50 disabled:opacity-50"
+              className="px-4 py-2 text-sm rounded-lg disabled:opacity-50"
+              style={{
+                backgroundColor: "#fef9c3",
+                color: "#854d0e",
+                border: "1px solid #facc15",
+              }}
               onClick={() => setIsEditing(true)}
               disabled={disabled}
             >
               编辑大纲
             </button>
             <button
-              className="px-4 py-2 text-sm rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+              className="px-4 py-2 text-sm rounded-lg disabled:opacity-50"
+              style={{
+                backgroundColor: "#16a34a",
+                color: "#ffffff",
+              }}
               onClick={onApprove}
               disabled={disabled}
             >

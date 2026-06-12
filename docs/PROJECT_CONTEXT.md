@@ -78,6 +78,13 @@
 - 暗色模式：CSS 有 `dark:` 变量但无切换按钮
 - `.env` 中有真实 API Key，注意安全
 - 前端无全局状态管理，纯组件内 `useState`
+- HITL 审核后恢复执行（`/api/review`）用的是 `ainvoke` 同步调用，不走 SSE 流式，链路追踪页面无法记录后续节点执行（待办：HITL 审核后也用 SSE 流式）
+
+### 最近修复
+
+- **HITL 审核组件不显示**（ERR-007）：`chat.py` 流结束后以 `interrupts` 检测为主条件导致 `outline` 事件未发送，改为以 `node_status` 为主条件
+- **审核内容重复**（ERR-008）：`generate_outline`/`generate_draft` 的 token 被流式追加到消息气泡，从 `_GENERATING_NODES` 中移除
+- **审核组件深色模式黑底**（ERR-009）：`prose` 类覆盖内联样式，去掉 `prose` 改用纯内联样式 + hex 色值
 
 ## 3. 核心文件索引 (Key Files)
 
