@@ -77,17 +77,23 @@ flowchart TD
 ## 状态流转
 
 ```
-idle → researching → outline_review → generating → answer_review → done
-                ↑          │                 ↑          │
-                └──────────┘(打回)            └──────────┘(打回)
+                           ┌─── chitchat ───→ done（直接回复）
+                           │
+idle → classifying ────────┤
+                           │                  ┌──→ done（最终答案）
+                           └→ researching ──→ outline_review ──→ generating ──→ answer_review
+                                  ↑                │                        │
+                                  └────────────────┘(打回)                   └──────────┘(打回)
 ```
 
 | 前端 phase | 对应节点 | 用户看到的 |
 |------------|---------|-----------|
 | idle | — | 欢迎页 |
-| researching | classify_query → research | "正在检索相关知识库文档..." |
+| classifying | classify_query | "正在分析问题..." |
+| chitchat | direct_reply | 闲聊直接回复（不走 RAG） |
+| researching | research (子图) | "正在检索相关知识库文档..." |
 | outline_review | generate_outline (interrupt) | 大纲审核面板 |
 | generating | generate_draft | "正在生成答案..." |
 | answer_review | generate_draft (interrupt) | 答案审核面板 + 幻觉检测结果 |
-| done | finalize | 最终答案 |
+| done | finalize / direct_reply | 最终答案 |
 | error | — | 错误信息 |
