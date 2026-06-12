@@ -13,6 +13,12 @@ import {
   deleteConversation,
   deriveTitle,
   type Conversation,
+  loadGroups,
+  createGroup,
+  renameGroup,
+  deleteGroup,
+  moveConversationToGroup,
+  type Group,
 } from "@/lib/conversation";
 
 import ChatMessage from "@/components/ChatMessage";
@@ -26,6 +32,7 @@ import StatusBadge from "@/components/StatusBadge";
 export default function Home() {
   // ── 会话管理 ──
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
@@ -43,9 +50,10 @@ export default function Home() {
   const rafRef = useRef<number | null>(null);
   const lastAssistantIdRef = useRef<string | null>(null);
 
-  // ── 初始化：加载会话列表 ──
+  // ── 初始化：加载会话列表和分组 ──
   useEffect(() => {
     setConversations(loadConversations());
+    setGroups(loadGroups());
   }, []);
 
   // ── 持久化当前对话 ──
@@ -196,6 +204,25 @@ export default function Home() {
   // ── 重命名对话 ──
   const handleRename = (id: string, newTitle: string) => {
     updateConversation(id, { title: newTitle });
+    setConversations(loadConversations());
+  };
+
+  // ── 分组管理 ──
+  const handleCreateGroup = (name: string) => {
+    createGroup(name);
+    setGroups(loadGroups());
+  };
+  const handleRenameGroup = (id: string, newName: string) => {
+    renameGroup(id, newName);
+    setGroups(loadGroups());
+  };
+  const handleDeleteGroup = (id: string) => {
+    deleteGroup(id);
+    setGroups(loadGroups());
+    setConversations(loadConversations());
+  };
+  const handleMoveToGroup = (convId: string, groupId: string | null) => {
+    moveConversationToGroup(convId, groupId);
     setConversations(loadConversations());
   };
 
@@ -607,15 +634,22 @@ export default function Home() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950">
+    <div className="flex h-screen overflow-hidden
+      bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20
+      dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950/20">
       {/* ── 侧边栏 ── */}
       <Sidebar
         conversations={conversations}
+        groups={groups}
         activeId={activeId}
         onNew={handleNew}
         onSelect={handleSelect}
         onRename={handleRename}
         onDelete={handleDelete}
+        onCreateGroup={handleCreateGroup}
+        onRenameGroup={handleRenameGroup}
+        onDeleteGroup={handleDeleteGroup}
+        onMoveToGroup={handleMoveToGroup}
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
@@ -628,9 +662,8 @@ export default function Home() {
         `}
       >
         {/* 顶部栏 */}
-        <header className="flex items-center justify-between px-4 py-3
-          bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm
-          border-b border-slate-200 dark:border-slate-800 shrink-0">
+        <header className="flex items-center justify-between px-5 py-3
+          glass border-b border-white/20 dark:border-slate-700/50 shrink-0">
           <div className="flex items-center gap-3">
             {/* 移动端菜单按钮 */}
             <button
@@ -641,7 +674,7 @@ export default function Home() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
-            <h1 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+            <h1 className="text-sm font-semibold text-gradient">
               Agentic RAG 知识库
             </h1>
           </div>
@@ -684,8 +717,8 @@ export default function Home() {
         </div>
 
         {/* 底部输入区 */}
-        <div className="shrink-0 border-t border-slate-200 dark:border-slate-800
-          bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm pt-3">
+        <div className="shrink-0
+          glass border-t border-white/20 dark:border-slate-700/50 pt-3 pb-2">
           <ChatInput
             value={input}
             onChange={setInput}

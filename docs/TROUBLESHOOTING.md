@@ -61,6 +61,17 @@
 
 ---
 
+### ERR-006 | 会话列表显示 unknown（checkpoint 二进制格式）
+
+| 项 | 内容 |
+|---|------|
+| **错误** | Dashboard 会话管理页面所有字段显示为 `"unknown"` / `"-"` |
+| **根因** | `AsyncSqliteSaver` 把 checkpoint 序列化为二进制 blob，`json.loads()` 失败被吞掉 |
+| **修复** | 不直接读 SQLite，改用 `graph.aget_state(config)` API 正确反序列化 |
+| **教训** | 不要绕过 LangGraph API 直接读 checkpointer 数据库，格式可能随实现变化 |
+
+---
+
 ## 快速索引
 
 | 编号 | 关键词 | 类别 |
@@ -70,3 +81,4 @@
 | 003 | closed database, __aenter__, ProgrammingError | 资源生命周期 |
 | 004 | 404, encodeURIComponent, path param, 特殊字符 | URL 路由 |
 | 005 | title, unknown, metadata, loader | 元数据缺失 |
+| 006 | unknown, checkpoint, blob, json.loads, 会话列表 | 序列化格式 |

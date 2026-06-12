@@ -67,7 +67,7 @@ async def get_stats():
         stats["index_files"] = {"error": str(e)}
 
     try:
-        sessions = _list_sessions_from_db()
+        sessions = await _list_sessions_from_graph()
         active_count = sum(1 for s in sessions if s.get("has_interrupt"))
         stats["sessions"] = {"total": len(sessions), "active": active_count}
     except Exception as e:
@@ -210,46 +210,66 @@ def _get_db_connection():
     return conn
 
 
-def _list_sessions_from_db() -> list[dict]:
-    conn = _get_db_connection()
-    if conn is None:
-        return []
+async def _list_sessions_from_graph() -> list[dict]:
+    """通过 LangGraph 异步 API 读取会话列表，正确反序列化 checkpoint"""
     try:
-        cursor = conn.cursor()
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-        tables = [row[0] for row in cursor.fetchall()]
+        from graph.retrieval_graph import get_retrieval_graph
+        graph = await get_retrieval_graph()
 
-        sessions = []
-        if "checkpoints" in tables:
+        # 先从 SQLite 读取所有 thread_id
+        conn = _get_db_connection()
+        if conn is None:
+            return []
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tables = [row[0] for row in cursor.fetchall()]
+            if "checkpoints" not in tables:
+                return []
             cursor.execute("SELECT DISTINCT thread_id FROM checkpoints")
             thread_ids = [row[0] for row in cursor.fetchall()]
+        finally:
+            conn.close()
 
-            for tid in thread_ids:
-                cursor.execute("SELECT * FROM checkpoints WHERE thread_id = ? ORDER BY rowid DESC LIMIT 1", (tid,))
-                row = cursor.fetchone()
-                session = {"thread_id": tid, "has_interrupt": False, "node_status": "unknown"}
-                if row:
-                    try:
-                        import json
-                        columns = [desc[0] for desc in cursor.description]
-                        if "checkpoint" in columns:
-                            checkpoint_data = json.loads(row["checkpoint"]) if row["checkpoint"] else {}
-                            channel_values = checkpoint_data.get("channel_values", {})
-                            session["node_status"] = channel_values.get("node_status", "unknown")
-                            session["query"] = channel_values.get("query", "")
-                            session["has_interrupt"] = channel_values.get("needs_human_input", False)
-                    except Exception:
-                        pass
-                sessions.append(session)
+        # 用 LangGraph API 正确读取每个会话的状态
+        sessions = []
+        for tid in thread_ids:
+            config = {"configurable": {"thread_id": tid}}
+            try:
+                state = await graph.aget_state(config)
+                if state and state.values:
+                    values = state.values
+                    interrupts = getattr(state, "interrupts", None)
+                    sessions.append({
+                        "thread_id": tid,
+                        "node_status": values.get("node_status", "unknown"),
+                        "query": values.get("query", ""),
+                        "has_interrupt": bool(interrupts),
+                    })
+                else:
+                    sessions.append({
+                        "thread_id": tid,
+                        "node_status": "unknown",
+                        "query": "",
+                        "has_interrupt": False,
+                    })
+            except Exception:
+                sessions.append({
+                    "thread_id": tid,
+                    "node_status": "unknown",
+                    "query": "",
+                    "has_interrupt": False,
+                })
         return sessions
-    finally:
-        conn.close()
+    except Exception as e:
+        print(f"[Dashboard] 读取会话列表失败: {e}")
+        return []
 
 
 @router.get("/sessions")
 async def list_sessions():
     try:
-        sessions = _list_sessions_from_db()
+        sessions = await _list_sessions_from_graph()
         return {"sessions": sessions, "total": len(sessions)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取会话列表失败: {str(e)}")

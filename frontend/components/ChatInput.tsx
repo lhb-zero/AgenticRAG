@@ -19,7 +19,6 @@ export default function ChatInput({
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // 自适应高度
   const adjustHeight = useCallback(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -41,13 +40,13 @@ export default function ChatInput({
   };
 
   return (
-    <div className="w-full max-w-3xl mx-auto px-4 pb-4">
-      <div className="relative flex items-end gap-2 rounded-2xl
-        bg-white dark:bg-slate-800
-        border border-slate-200 dark:border-slate-700
-        shadow-sm hover:shadow-md focus-within:shadow-md
-        focus-within:border-blue-400 dark:focus-within:border-blue-500
-        transition-all duration-200 px-4 py-3"
+    <div className="w-full max-w-3xl mx-auto px-4">
+      <div className="relative flex items-end gap-3
+        rounded-2xl px-4 py-3
+        bg-white/60 dark:bg-slate-800/60
+        border border-slate-200/60 dark:border-slate-700/40
+        shadow-sm hover:shadow-md focus-glow
+        transition-all duration-300"
       >
         <textarea
           ref={textareaRef}
@@ -69,9 +68,14 @@ export default function ChatInput({
           disabled={!value.trim() || isLoading || disabled}
           className="shrink-0 w-9 h-9 flex items-center justify-center
             rounded-xl transition-all duration-200
-            bg-blue-600 hover:bg-blue-500 disabled:bg-slate-200
-            dark:disabled:bg-slate-700 disabled:cursor-not-allowed
-            text-white disabled:text-slate-400"
+            bg-gradient-to-br from-blue-500 to-indigo-600
+            hover:from-blue-400 hover:to-indigo-500
+            shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30
+            disabled:from-slate-200 disabled:to-slate-200
+            dark:disabled:from-slate-700 dark:disabled:to-slate-700
+            disabled:shadow-none disabled:cursor-not-allowed
+            text-white disabled:text-slate-400
+            active:scale-95"
           title="发送 (Enter)"
         >
           {isLoading ? (
@@ -90,8 +94,8 @@ export default function ChatInput({
           )}
         </button>
       </div>
-      <p className="text-[11px] text-slate-400 dark:text-slate-500 text-center mt-2">
-        Agentic RAG 知识库系统 · 基于 LangGraph 自我纠错检索
+      <p className="text-[11px] text-slate-400 dark:text-slate-500/60 text-center mt-2.5">
+        Agentic RAG · LangGraph 自我纠错检索
       </p>
     </div>
   );

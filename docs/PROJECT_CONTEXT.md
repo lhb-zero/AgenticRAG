@@ -35,15 +35,17 @@
 **前端核心：**
 - [x] Types & API — TypeScript 类型 + SSE 解析（含 event 类型透传）+ Dashboard 全部 API 封装
 - [x] 三栏布局 — 侧边栏（会话列表）+ 主内容区（对话/欢迎页）+ 底部输入区
-- [x] 侧边栏 — 新对话、会话列表、三点菜单（重命名/删除）、管理后台入口
-- [x] 欢迎页 — Logo + 系统介绍 + 4 个快捷提问卡片
-- [x] ChatInput 组件 — 自适应高度 textarea + 发送按钮 + 快捷键提示
+- [x] 侧边栏 — 新对话、会话列表、三点菜单（重命名/删除/移动到分组）、管理后台入口
+- [x] 会话分组 — 创建/重命名/删除分组、将会话移动到分组、折叠/展开分组
+- [x] Glassmorphism UI — 毛玻璃效果（header/input/sidebar）、渐变背景、微动画、浮动光斑
+- [x] 欢迎页 — 渐变 Logo 浮动动画 + 4 个彩色图标快捷提问卡片 + 背景装饰光斑
+- [x] ChatInput 组件 — 自适应高度 textarea + 渐变发送按钮 + 聚焦发光
 - [x] StatusBadge 组件 — 带脉冲动画的彩色状态指示器
 - [x] 聊天页（`page.tsx`）— Token 级流式渲染（`useRef` + `rAF` 节流）、HITL 审核交互
-- [x] ChatMessage — 助手消息淡色背景 + Markdown 深度样式（@tailwindcss/typography）
+- [x] ChatMessage — 用户气泡渐变蓝紫 + 助手消息半透明玻璃底 + 消息入场动画 + Markdown 深度样式
 - [x] OutlineReview — 大纲审核（编辑/批准/打回）
 - [x] AnswerReview — 答案审核 + 幻觉检测结果展示（绿色忠实/红色警告）
-- [x] 会话 localStorage 持久化 — 自动保存/恢复/重命名/删除
+- [x] 会话 localStorage 持久化 — 自动保存/恢复/重命名/删除/分组
 - [x] 管理仪表盘 — `/dashboard` 路由，5 个子页面：
 
 **仪表盘页面：**
@@ -68,6 +70,8 @@
 5. **文档管理**：上传后自动调用 `buildIndex("uploaded")` 构建索引，加载时自动补充 `title` 元数据。分块查看用弹窗 + 分页 + 搜索，不是内联展开。
 6. **URL 路由**：文档标题可能含特殊字符（`/`、`#`、`=`），因此分块查询和删除端点使用 query param 而非 path param。
 7. **幻觉检测**：`generate_draft_node` 中调用 `_check_hallucination()`，结果存入 state 的 `hallucination_check` 字段，AnswerReview 组件展示。
+8. **会话列表读取**：`AsyncSqliteSaver` 的 checkpoint 是二进制 blob，不能直接 `json.loads()`。必须通过 `graph.aget_state()` API 读取，才能正确反序列化。
+9. **Glassmorphism 设计**：使用 `backdrop-blur` + 半透明背景 + 渐变色实现毛玻璃效果。全局背景用渐变（蓝紫微调），输入框/头部/侧边栏统一使用 `glass` 工具类。
 
 ### 已知问题
 

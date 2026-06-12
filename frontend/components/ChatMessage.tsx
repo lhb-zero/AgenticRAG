@@ -17,7 +17,7 @@ export default function ChatMessage({ message }: Props) {
   const isStreaming = message.isStreaming;
 
   return (
-    <div className={`flex gap-4 py-4 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
+    <div className={`msg-enter flex gap-4 py-4 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
       {/* 头像 */}
       <div
         className={`shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold mt-1 ${
@@ -38,20 +38,23 @@ export default function ChatMessage({ message }: Props) {
 
         {isUser ? (
           /* 用户消息：蓝色气泡 */
-          <div className="rounded-2xl rounded-tr-md bg-blue-600 text-white px-4 py-2.5">
+          <div className="rounded-2xl rounded-tr-md bg-gradient-to-br from-blue-500 to-indigo-600
+            text-white px-4 py-2.5 shadow-md shadow-blue-500/15">
             <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.content}</p>
           </div>
         ) : isStreaming ? (
           /* 助手消息：流式输出中 */
           <div className="text-sm text-slate-800 dark:text-slate-100 whitespace-pre-wrap break-words leading-[1.8] max-w-none
-            bg-slate-50 dark:bg-slate-800/50 rounded-2xl rounded-tl-md px-4 py-3">
+            bg-white/50 dark:bg-slate-800/40 rounded-2xl rounded-tl-md px-4 py-3
+            border border-slate-100/80 dark:border-slate-700/30">
             {message.content}
             <span className="streaming-cursor" />
           </div>
         ) : (
           /* 助手消息：完整 Markdown 渲染 */
           <div className="chat-markdown text-sm text-slate-800 dark:text-slate-100 leading-[1.8] max-w-none
-            bg-slate-50 dark:bg-slate-800/50 rounded-2xl rounded-tl-md px-4 py-3">
+            bg-white/50 dark:bg-slate-800/40 rounded-2xl rounded-tl-md px-4 py-3
+            border border-slate-100/80 dark:border-slate-700/30">
             <ReactMarkdown
               components={{
                 // 代码块：深色背景 + 圆角
