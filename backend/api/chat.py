@@ -271,13 +271,25 @@ async def test_graph(request: ChatRequest):
 
     # 3. 测试 FAISS 检索
     try:
+        from tools.retriever import get_vectorstore
         start = time.time()
+        vs = get_vectorstore()
+        docstore = vs.docstore
+        docs_dict = None
+        if hasattr(docstore, "_dict"):
+            docs_dict = docstore._dict
+        elif hasattr(docstore, "dict"):
+            docs_dict = docstore.dict
+        total_docs = len(docs_dict) if docs_dict else 0
+
+        # 同时测试检索功能
         docs = similarity_search(request.query, k=3)
         elapsed = time.time() - start
         results["faiss"] = {
             "ok": True,
             "elapsed_s": round(elapsed, 2),
-            "doc_count": len(docs),
+            "doc_count": total_docs,
+            "search_hits": len(docs),
             "preview": [d["content"][:80] for d in docs[:2]],
         }
     except BaseException as e:
