@@ -101,7 +101,7 @@ export default function ChatMessage({ message }: Props) {
     <div className={`msg-enter flex gap-4 py-4 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
       {/* 头像 */}
       <div
-        className={`shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold mt-1 ${
+        className={`shrink-0 w-9 h-9 rounded-lg flex items-center justify-center text-white text-sm font-bold mt-1 ${
           isUser
             ? "bg-blue-600"
             : "bg-gradient-to-br from-indigo-500 to-purple-600"
@@ -113,11 +113,15 @@ export default function ChatMessage({ message }: Props) {
       {/* 消息内容 */}
       <div className={`flex flex-col min-w-0 ${isUser ? "items-end max-w-[70%]" : "items-start flex-1"}`}>
         {/* 角色标签 + 时间 */}
-        <div className="flex items-center gap-2 mb-1.5 px-0.5">
-          <span className="text-[11px] text-slate-400 dark:text-slate-500">
+        <div className="flex items-center gap-2.5 mb-2 px-0.5">
+          <span className={`text-xs font-semibold ${
+            isUser
+              ? "text-blue-600 dark:text-blue-400"
+              : "text-indigo-600 dark:text-indigo-400"
+          }`}>
             {isUser ? "你" : "Agentic RAG"}
           </span>
-          <span className="text-[10px] text-slate-300 dark:text-slate-600">
+          <span className="text-[11px] text-slate-400 dark:text-slate-500">
             {formatTime(message.timestamp)}
           </span>
         </div>
@@ -210,23 +214,26 @@ export default function ChatMessage({ message }: Props) {
             </div>
 
             {/* 底部操作栏 - 悬停时显示，类似 ChatGPT */}
-            <div className="flex items-center gap-1 mt-1.5 opacity-0 group-hover/msg:opacity-100
+            <div className="flex items-center gap-1 mt-2 opacity-0 group-hover/msg:opacity-100
               transition-opacity duration-150">
               <button
                 onClick={handleCopy}
-                className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px]
-                  hover:bg-slate-100 dark:hover:bg-slate-700/50
-                  text-slate-400 dark:text-slate-500 transition-colors"
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
+                  transition-all duration-150
+                  ${copied
+                    ? "bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 border border-green-200 dark:border-green-800"
+                    : "bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-700 dark:hover:text-slate-300"
+                  }`}
                 title="复制"
               >
                 {copied ? (
                   <>
-                    <CheckIcon className="text-green-500" />
-                    <span className="text-green-500">已复制</span>
+                    <CheckIcon className="text-green-500 w-3.5 h-3.5" />
+                    <span>已复制</span>
                   </>
                 ) : (
                   <>
-                    <CopyIcon />
+                    <CopyIcon className="w-3.5 h-3.5" />
                     <span>复制</span>
                   </>
                 )}
