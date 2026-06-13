@@ -72,7 +72,7 @@
 7. **幻觉检测**：`generate_draft_node` 中调用 `_check_hallucination()`，结果存入 state 的 `hallucination_check` 字段，AnswerReview 组件展示。
 8. **会话列表读取**：`AsyncSqliteSaver` 的 checkpoint 是二进制 blob，不能直接 `json.loads()`。必须通过 `graph.aget_state()` API 读取，才能正确反序列化。
 9. **Glassmorphism 设计**：使用 `backdrop-blur` + 半透明背景 + 渐变色实现毛玻璃效果。全局背景用渐变（蓝紫微调），输入框/头部/侧边栏统一使用 `glass` 工具类。
-10. **FAISS 向量库选型**：选用 FAISS 而非 Milvus/Weaviate 等数据库方案，原因：①项目为单机原型，文档量级在万级以下，FAISS 性能足够；②零运维成本，`pip install` 即用，无需部署额外服务；③与 LangChain 深度集成，API 简洁。局限：①不支持原生 CRUD，删除文档需重建整个索引；②数据保存为本地文件（`.faiss` + `.pkl`），无内置备份/高可用；③单进程加载，百万级索引冷启动慢。生产环境迁移路径：Milvus（分布式）/ Qdrant（轻量级 Rust 实现）/ ChromaDB（嵌入式，类似 FAISS 定位但支持 CRUD）。
+10. **FAISS 向量库选型**：选用 FAISS（零运维、单机够用、LangChain 集成好），局限（无 CRUD、本地文件、冷启动慢）及生产迁移方案详见 [docs/faiss.md](faiss.md)。
 
 ### 已知问题
 
