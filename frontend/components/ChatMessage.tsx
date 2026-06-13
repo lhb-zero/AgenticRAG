@@ -138,7 +138,7 @@ export default function ChatMessage({ message }: Props) {
           </div>
         ) : (
           /* 助手消息：完整 Markdown 渲染 */
-          <div className="group relative">
+          <div className="group/msg">
             <div className="chat-markdown text-sm text-slate-800 dark:text-slate-100 leading-[1.8] max-w-none
               bg-white/50 dark:bg-slate-800/40 rounded-2xl rounded-tl-md px-4 py-3
               border border-slate-100/80 dark:border-slate-700/30">
@@ -209,21 +209,29 @@ export default function ChatMessage({ message }: Props) {
               </ReactMarkdown>
             </div>
 
-            {/* 复制按钮 - 悬浮在消息右上角，鼠标悬停时显示 */}
-            <button
-              onClick={handleCopy}
-              className="absolute -top-2 -right-2 p-1.5 rounded-lg opacity-0 group-hover:opacity-100
-                transition-opacity duration-150
-                bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600
-                shadow-sm hover:shadow-md"
-              title="复制"
-            >
-              {copied ? (
-                <CheckIcon className="text-green-500" />
-              ) : (
-                <CopyIcon className="text-slate-400 dark:text-slate-300" />
-              )}
-            </button>
+            {/* 底部操作栏 - 悬停时显示，类似 ChatGPT */}
+            <div className="flex items-center gap-1 mt-1.5 opacity-0 group-hover/msg:opacity-100
+              transition-opacity duration-150">
+              <button
+                onClick={handleCopy}
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px]
+                  hover:bg-slate-100 dark:hover:bg-slate-700/50
+                  text-slate-400 dark:text-slate-500 transition-colors"
+                title="复制"
+              >
+                {copied ? (
+                  <>
+                    <CheckIcon className="text-green-500" />
+                    <span className="text-green-500">已复制</span>
+                  </>
+                ) : (
+                  <>
+                    <CopyIcon />
+                    <span>复制</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         )}
       </div>
