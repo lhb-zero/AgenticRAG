@@ -47,7 +47,7 @@ async def trigger_index_build(source: str = "mock"):
 
 @router.post("/upload")
 async def upload_document(file: UploadFile = File(...)):
-    """上传文档到 data/raw 目录"""
+    """上传文档到 data/raw 目录并自动重建索引"""
     allowed_extensions = {".txt", ".pdf", ".docx", ".doc", ".md"}
 
     ext = os.path.splitext(file.filename or "")[1].lower()
@@ -68,9 +68,16 @@ async def upload_document(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"文件保存失败: {str(e)}")
 
+    # 上传成功后自动重建索引
+    try:
+        chunk_count = build_index_from_directory(raw_dir)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"文件上传成功但索引构建失败: {str(e)}")
+
     return {
         "success": True,
         "filename": file.filename,
         "path": file_path,
-        "message": "文件上传成功",
+        "chunk_count": chunk_count,
+        "message": f"文件上传成功，索引已更新（共 {chunk_count} 个分块）",
     }
