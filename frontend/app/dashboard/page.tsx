@@ -108,7 +108,7 @@ export default function DashboardOverview() {
             <HealthItem
               name="FAISS 向量库"
               ok={health.results?.faiss?.ok}
-              detail={health.results?.faiss?.ok ? `${health.results.faiss.doc_count}个文档 ${health.results.faiss.elapsed_s}s` : health.results?.faiss?.error}
+              detail={health.results?.faiss?.ok ? `${health.results.faiss.doc_count}个分块 ${health.results.faiss.elapsed_s}s` : health.results?.faiss?.error}
             />
           </div>
         ) : (
