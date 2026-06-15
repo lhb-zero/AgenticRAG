@@ -107,6 +107,17 @@
 
 ---
 
+### ERR-010 | FAISS 健康检查显示查询返回数而非文档总数
+
+| 项 | 内容 |
+|---|------|
+| **错误** | 仪表盘健康检查 "FAISS 向量库" 显示 3 个文档，但实际 docstore 有 196 个分块 |
+| **根因** | `/api/test-graph` 的 FAISS 测试执行 `similarity_search("健康检查", k=3)`，`doc_count` 取的是返回结果数（k=3），不是 docstore 总文档数 |
+| **修复** | 从 docstore 读取实际总文档数赋给 `doc_count`，检索命中数单独记录在 `search_hits` |
+| **教训** | 健康检查应展示系统状态指标（总文档数），不是查询结果指标（命中数） |
+
+---
+
 ## 快速索引
 
 | 编号 | 关键词 | 类别 |
@@ -120,3 +131,4 @@
 | 007 | outline_review, interrupts, status 事件, HITL 组件不显示 | SSE 事件 |
 | 008 | 重复内容, _GENERATING_NODES, token 流, 审核组件 | 流式输出 |
 | 009 | prose, dark mode, 黑色背景, 内联样式 | 前端样式 |
+| 010 | FAISS, doc_count, 健康检查, 查询返回数, 文档总数 | 数据指标 |

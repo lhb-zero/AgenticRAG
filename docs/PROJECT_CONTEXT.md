@@ -86,6 +86,14 @@
 - **HITL 审核组件不显示**（ERR-007）：`chat.py` 流结束后以 `interrupts` 检测为主条件导致 `outline` 事件未发送，改为以 `node_status` 为主条件
 - **审核内容重复**（ERR-008）：`generate_outline`/`generate_draft` 的 token 被流式追加到消息气泡，从 `_GENERATING_NODES` 中移除
 - **审核组件深色模式黑底**（ERR-009）：`prose` 类覆盖内联样式，去掉 `prose` 改用纯内联样式 + hex 色值
+- **FAISS 健康检查数字错误**（ERR-010）：健康检查显示查询返回数而非文档总数，改为从 docstore 读取实际总文档数
+
+### 最近新增
+
+- **README.md**：项目说明文档，含核心特性、技术栈、快速开始、项目结构、API 端点列表
+- **消息复制按钮**：AI 消息底部 hover 显示操作栏，点击复制，带已复制状态反馈
+- **消息时间戳**：每条消息显示发送时间（今天 HH:MM，非今天 MM/DD HH:MM）
+- **UI 体验优化**：头像加大、角色名称加粗+颜色区分、底部操作栏加大+边框背景
 
 ## 3. 核心文件索引 (Key Files)
 
@@ -122,7 +130,7 @@
 | `frontend/app/dashboard/pipeline/page.tsx` | 链路追踪：流程图 + 详情 |
 | `frontend/app/dashboard/sessions/page.tsx` | 会话管理 |
 | `frontend/app/dashboard/settings/page.tsx` | 系统配置：模型切换 + 参数调整 |
-| `frontend/components/ChatMessage.tsx` | 消息渲染（流式/Markdown 双模式 + 淡色背景） |
+| `frontend/components/ChatMessage.tsx` | 消息渲染（流式/Markdown 双模式 + 底部复制按钮 + 时间戳） |
 | `frontend/components/ChatInput.tsx` | 输入区：自适应高度 + 发送按钮 |
 | `frontend/components/Sidebar.tsx` | 侧边栏：会话列表 + 三点菜单（重命名/删除） |
 | `frontend/components/WelcomeScreen.tsx` | 欢迎页：Logo + 快捷提问 |
